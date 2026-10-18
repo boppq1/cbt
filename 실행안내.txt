@@ -1,6 +1,2 @@
-압축을 푼 폴더에서 터미널을 열고 아래 명령을 실행하세요.
-
-python3 -m http.server 8000
-
-브라우저 접속 주소: http://localhost:8000
-종료: Control + C
+이 폴더에서 python3 -m http.server 8000 실행 후 http://localhost:8000 접속
+현재 357문항 출제. 원본 375문항 전체 복원은 미완료입니다.

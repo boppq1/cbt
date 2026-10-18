@@ -1,8 +1,818 @@
-let bank=[],exam=null,index=0,answers={},flags={},deadline=0,done=false,review=false,mode='exam',tick;const app=document.querySelector('#app');const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const read=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch{return d}};const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};let wrong=read('metal-wrong',[]),history=read('metal-history',[]);function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
-function home(){clearInterval(tick);exam=null;let cats=[...new Set(bank.map(q=>q.category))];app.innerHTML=`<section class="intro"><h1>정현이 파이팅</h1><p class="muted">과목과 문항 수를 선택하고 시험을 시작하세요.</p></section><div class="layout"><section class="card"><div class="topline"><h2>01. 시험 범위 선택</h2><button id="all">전체 선택 / 해제</button></div><div class="subjects">${cats.map(c=>`<label class="subject"><input type="checkbox" checked value="${c}">${c}<small>${bank.filter(q=>q.category===c&&q.answer!==null).length}</small></label>`).join('')}</div><p class="note">원본의 문제·선택지가 불완전한 항목과 정답이 누락된 항목은 시험 출제에서 제외했습니다. 총 375개 번호 중 357문항을 채점 가능한 문제로 제공합니다. 수식은 원본 PDF와 함께 확인해 주세요.</p><a href="source.pdf" target="_blank">원본 문제은행 PDF 열기 ↗</a><div class="history"><b>최근 시험 기록</b>${history.length?history.slice(0,5).map(h=>`<div>${esc(h.date)} · ${h.total}문제 · <b>${h.score}점</b></div>`).join(''):'<p class="muted">첫 시험을 시작하면 기록이 쌓입니다.</p>'}</div></section><aside class="card"><h2>02. 시험 설정</h2><label class="field" for="mode">학습 방식</label><select id="mode"><option value="exam">실전 모드 · 제출 후 채점</option><option value="practice">연습 모드 · 즉시 해설</option><option value="wrong">오답 복습 · ${wrong.length}문항</option></select><label class="field" for="count">출제 문항 수</label><select id="count"><option>20</option><option>40</option><option>60</option><option>100</option><option value="999" selected>선택 범위 전체 · 최대 357문항</option></select><label class="field" for="minutes">제한시간 (분, 0 = 제한 없음)</label><input id="minutes" type="number" min="0" max="600" value="0"><label class="field"><input id="random" type="checkbox" checked> 문제 순서 무작위</label><button class="primary full" id="start">시험 시작하기 →</button><p class="muted" style="font-size:12px">친구에게 사이트 링크를 보내세요.<br>각자 독립적으로 응시할 수 있습니다.</p><p id="error" role="alert"></p></aside></div>`;document.querySelector('#all').onclick=()=>{let list=[...document.querySelectorAll('.subject input')],checked=!list.every(x=>x.checked);list.forEach(x=>x.checked=checked)};document.querySelector('#start').onclick=start}
-function start(){let cats=[...document.querySelectorAll('.subject input:checked')].map(x=>x.value);mode=document.querySelector('#mode').value;let pool=bank.filter(q=>q.answer!==null&&cats.includes(q.category)&&(mode!=='wrong'||wrong.includes(q.id)));if(!pool.length){document.querySelector('#error').textContent='출제 가능한 문제가 없습니다. 범위나 학습 방식을 바꿔 주세요.';return}exam=(document.querySelector('#random').checked?shuffle(pool):pool).slice(0,+document.querySelector('#count').value);let minutes=Math.min(600,Math.max(0,Number(document.querySelector('#minutes').value)||0));deadline=minutes?Date.now()+minutes*60000:0;index=0;answers={};flags={};done=false;review=false;render();tick=setInterval(()=>{updateTime();if(deadline&&Date.now()>=deadline&&!done)finish()},1000)}
-function updateTime(){let el=document.querySelector('#timer');if(el){let s=Math.max(0,Math.ceil((deadline-Date.now())/1000));el.textContent=deadline?`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`:'시간 제한 없음'}}
-function render(){let q=exam[index],selected=answers[q.id],reveal=done||(mode==='practice'&&selected!==undefined),count=Object.keys(answers).length;app.innerHTML=`<div class="topline"><div><span class="eyebrow">${done?'REVIEW NOTE':'CBT EXAMINATION'}</span><h2>${done?'시험 해설':mode==='practice'?'차근차근 연습하기':'집중해서 풀어보세요'}</h2></div><div class="timer" id="timer"></div></div><div class="progress"><i style="width:${count/exam.length*100}%"></i></div><div class="layout"><section class="card"><div class="topline"><span class="pill">${esc(q.category)} · 원본 ${q.number}번</span><button id="flag">${flags[q.id]?'★ 표시됨':'☆ 나중에 확인'}</button></div><div class="question">${index+1}. ${esc(q.question)}</div>${q.options.map((o,i)=>`<button class="option ${selected===i?'selected':''} ${reveal&&q.answer===i?'correct':''} ${reveal&&selected===i&&i!==q.answer?'wrong':''}" data-option="${i}" ${done?'disabled':''}><span class="circle">${i+1}</span><span>${esc(o)}</span></button>`).join('')}${reveal?`<div class="explanation"><b>${selected===q.answer?'정답입니다 ✓':selected===undefined?'미응답': '오답입니다'} · 정답 ${q.answer+1}번</b><br>${esc(q.explanation)}</div>`:''}<div class="actions"><button id="prev" ${index===0?'disabled':''}>← 이전</button><a href="source.pdf" target="_blank" style="font-size:12px">원본 확인 ↗</a><button id="next" ${index===exam.length-1?'disabled':''}>다음 →</button></div></section><aside class="card"><h2>문제 탐색</h2><p class="muted">${count} / ${exam.length}문제 응답 · ★ 검토 표시</p><div class="navgrid">${exam.map((v,i)=>`<button data-nav="${i}" class="${answers[v.id]!==undefined?'answered':''} ${index===i?'current':''} ${flags[v.id]?'flag':''}" aria-label="${i+1}번 문제">${i+1}</button>`).join('')}</div><button class="primary full" id="submit">${done?'결과 보기':'답안 제출 및 채점'}</button><button class="full" id="exit">처음으로</button></aside></div>`;updateTime();document.querySelectorAll('[data-option]').forEach(b=>b.onclick=()=>{answers[q.id]=+b.dataset.option;render()});document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{index=+b.dataset.nav;render()});document.querySelector('#prev').onclick=()=>{index--;render()};document.querySelector('#next').onclick=()=>{index++;render()};document.querySelector('#flag').onclick=()=>{flags[q.id]=!flags[q.id];render()};document.querySelector('#submit').onclick=()=>{if(done)result();else if(confirm(`${exam.length-count}문제 미응답입니다. 답안을 제출할까요?`))finish()};document.querySelector('#exit').onclick=()=>{if(done||confirm('현재 시험을 종료하고 처음으로 돌아갈까요?'))home()}}
-function finish(){if(done)return;done=true;clearInterval(tick);let errors=exam.filter(q=>answers[q.id]!==q.answer);wrong=[...new Set([...wrong.filter(id=>!exam.some(q=>q.id===id)),...errors.map(q=>q.id)])];save('metal-wrong',wrong);let score=Math.round((exam.length-errors.length)/exam.length*100);history.unshift({date:new Date().toLocaleString('ko-KR'),total:exam.length,score});history=history.slice(0,20);save('metal-history',history);result()}
-function result(){let correct=exam.filter(q=>answers[q.id]===q.answer).length,score=Math.round(correct/exam.length*100);app.innerHTML=`<section class="card" style="max-width:700px;margin:30px auto;text-align:center"><div class="eyebrow">EXAM COMPLETE</div><h1>오늘도 한 걸음 앞으로.</h1><div class="score">${score}<span style="font-size:24px">점</span></div><p>${exam.length}문제 중 <b>${correct}문제 정답</b> · 미응답 ${exam.length-Object.keys(answers).length}문제</p><p class="muted">학습 목표 60점 기준 ${score>=60?'목표를 달성했습니다.':'틀린 문제를 복습하며 다시 도전해 보세요.'}</p><div class="flex" style="justify-content:center"><button class="primary" id="review">전체 정답 · 해설 보기</button><button id="errors">오답 해설 보기</button><button id="home">처음으로</button></div><p class="muted" style="font-size:12px">오답과 시험 기록이 이 브라우저에 저장되었습니다.</p></section>`;document.querySelector('#review').onclick=()=>{index=0;render()};document.querySelector('#errors').onclick=()=>{let i=exam.findIndex(q=>answers[q.id]!==q.answer);if(i<0){alert('모든 문제를 맞혔습니다!');return}index=i;render()};document.querySelector('#home').onclick=home}
-document.querySelector('#share').onclick=async()=>{try{await navigator.clipboard.writeText(location.href);alert('사이트 링크를 복사했습니다. 친구에게 보내 주세요.')}catch{prompt('아래 링크를 복사해 주세요.',location.href)}};fetch('questions.json').then(r=>{if(!r.ok)throw Error();return r.json()}).then(q=>{bank=q;home()}).catch(()=>app.innerHTML='<p>문제를 불러오지 못했습니다. 새로고침해 주세요.</p>');
+let chosenMode = "exam";
+let instantFeedback = false;
+
+function advanceQuestion() {
+  if (deadline !== null && Date.now() >= deadline && !finished) { finishExam(); return; }
+  if (currentIndex < exam.length - 1) {
+    currentIndex++;
+    showQuestion();
+  } else {
+    const missing = exam.findIndex(q => answers[q.id] === undefined);
+    if (missing !== -1) { currentIndex = missing; showQuestion(); }
+    else finishExam();
+  }
+  window.scrollTo(0, 0);
+}
+
+function showHome() {
+  stopTimer();
+  sessionStarted = false;
+  app.innerHTML = `
+    <section class="intro"><h1>정현이 파이팅</h1><p class="muted">학습 방법을 선택하세요.</p></section>
+    <section class="card">
+      <button class="full primary" data-mode="exam">1. 전체 문제 풀어보기 · 실전 연습</button>
+      <button class="full" data-mode="practice">2. 연습 모드 · 전체 풀기</button>
+      <button class="full" data-mode="custom">3. 골라서 풀어보기</button>
+      <button class="full" data-mode="wrong">4. 오답노트 · ${wrongIds.length}문항</button>
+      <p class="muted small">현재 ${bank.length}문항 · 무작위 출제</p>
+    </section>`;
+  document.querySelectorAll('[data-mode]').forEach(button => {
+    button.onclick = () => {
+      chosenMode = button.dataset.mode;
+      if (chosenMode === 'wrong' && !wrongIds.length) { alert('아직 오답이 없습니다.'); return; }
+      showSettings();
+    };
+  });
+}
+
+const app = document.getElementById("app");
+
+let bank = [];
+let exam = [];
+let currentIndex = 0;
+let answers = {};
+let flags = {};
+let mode = "exam";
+let deadline = null;
+let timerId = null;
+let finished = false;
+let sessionStarted = false;
+let reviewOnlyWrong = false;
+let practiceRevealed = {};
+
+function readStorage(key, fallback) {
+    try {
+        const value = JSON.parse(localStorage.getItem(key));
+        return Array.isArray(value) ? value : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function writeStorage(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+        // 저장 공간을 사용할 수 없어도 시험은 계속 진행합니다.
+    }
+}
+
+let wrongIds = readStorage("metal-wrong", []);
+let history = readStorage("metal-history", []);
+
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (character) => {
+        const replacements = {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;"
+        };
+
+        return replacements[character];
+    });
+}
+
+function shuffle(items) {
+    const result = [...items];
+
+    for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+    }
+
+    return result;
+}
+
+function stopTimer() {
+    clearInterval(timerId);
+    timerId = null;
+}
+
+function answeredCount() {
+    return exam.filter((question) =>
+        Object.hasOwn(answers, question.id)
+    ).length;
+}
+
+function isWrong(question) {
+    return answers[question.id] !== question.answer;
+}
+
+function showSettings() {
+    stopTimer();
+    sessionStarted = false;
+
+    const categories = [...new Set(bank.map((question) => question.category))];
+
+    const subjectsHtml = categories.map((category) => {
+        const count = bank.filter(
+            (question) => question.category === category
+        ).length;
+
+        return `
+      <label class="subject">
+        <input
+          type="checkbox"
+          name="subject"
+          value="${escapeHtml(category)}"
+          checked
+        >
+        ${escapeHtml(category)}
+        <span>${count}문항</span>
+      </label>
+    `;
+    }).join("");
+
+    const historyHtml = history.length
+        ? history.slice(0, 5).map((record) => `
+        <div class="history-item">
+          ${escapeHtml(record.date)}
+          · ${record.total}문제
+          · <strong>${record.score}점</strong>
+        </div>
+      `).join("")
+        : `<p class="muted small">아직 시험 기록이 없습니다.</p>`;
+
+    app.innerHTML = `
+    <section class="intro">
+      <h1>정현이 파이팅</h1>
+      <p class="muted">
+        과목과 문항 수를 선택하고 시험을 시작하세요.
+      </p>
+    </section>
+
+    <div class="layout">
+      <section class="card">
+        <div class="row">
+          <h2>시험 범위</h2>
+          <button id="toggleAll">전체 선택 / 해제</button>
+        </div>
+
+        <div class="subjects">
+          ${subjectsHtml}
+        </div>
+
+        <p class="notice">
+          출제 가능 ${bank.length}문항.
+          원본에서 정답이나 선택지가 불완전한 항목은 현재 출제에 포함되지 않습니다.
+          수식과 기호는 원본 PDF도 함께 확인하세요.
+        </p>
+
+        <a href="source.pdf" target="_blank" rel="noopener">
+          원본 PDF 보기
+        </a>
+
+        <div class="history">
+          <h2>최근 시험 기록</h2>
+          ${historyHtml}
+        </div>
+      </section>
+
+      <aside class="card">
+        <h2>시험 설정</h2>
+
+        <label class="field" for="mode">학습 방식</label>
+        <select id="mode">
+          <option value="exam">실전 모드</option>
+          <option value="practice">연습 모드 · 정답 확인 가능</option>
+          <option value="wrong">오답 복습 · ${wrongIds.length}문항</option>
+        </select>
+
+        <label class="field" for="count">문항 수</label>
+        <select id="count">
+          <option value="20">20문항</option>
+          <option value="40">40문항</option>
+          <option value="60">60문항</option>
+          <option value="100">100문항</option>
+          <option value="all" selected>선택 범위 전체</option>
+        </select>
+
+        <label class="field" for="minutes">
+          제한시간 · 분
+        </label>
+        <input
+          id="minutes"
+          type="number"
+          min="0"
+          max="600"
+          value="0"
+        >
+        <p class="muted small">0으로 설정하면 시간 제한이 없습니다.</p>
+
+        <label class="field">
+          <input id="random" type="checkbox" checked>
+          문제 순서 무작위
+        </label>
+
+        <h2 style="margin-top:24px">문제마다 정답과 해설을 볼까요?</h2>
+        <label class="field"><input type="radio" name="feedback" value="yes"> 네 · 확인 후 다음 문제</label>
+        <label class="field"><input type="radio" name="feedback" value="no" checked> 아니요 · 선택 즉시 다음 문제</label>
+        <button id="settingsBack" class="full">처음으로</button>
+        <button id="startButton" class="primary full">
+          시험 시작
+        </button>
+
+        <p id="error" role="alert"></p>
+      </aside>
+    </div>
+  `;
+
+    document.getElementById("toggleAll").onclick = () => {
+        const inputs = [
+            ...document.querySelectorAll('input[name="subject"]')
+        ];
+
+        const selectAll = !inputs.every((input) => input.checked);
+
+        inputs.forEach((input) => {
+            input.checked = selectAll;
+        });
+    };
+
+    document.getElementById("mode").value = chosenMode === "wrong" ? "wrong" : chosenMode === "practice" ? "practice" : "exam";
+    document.getElementById("mode").disabled = true;
+    document.querySelector(`input[name="feedback"][value="${chosenMode === "exam" ? "no" : "yes"}"]`).checked = true;
+    if (chosenMode !== "custom") {
+      document.querySelector('.subjects').style.display = 'none';
+      document.getElementById('toggleAll').style.display = 'none';
+      document.getElementById('count').disabled = true;
+    }
+    document.getElementById('settingsBack').onclick = showHome;
+    document.getElementById("startButton").onclick = startExam;
+}
+
+function startExam() {
+    const selectedCategories = [
+        ...document.querySelectorAll('input[name="subject"]:checked')
+    ].map((input) => input.value);
+
+    mode = document.getElementById("mode").value;
+    instantFeedback = document.querySelector('input[name="feedback"]:checked').value === 'yes';
+
+    let pool = bank.filter((question) =>
+        selectedCategories.includes(question.category)
+    );
+
+    if (mode === "wrong") {
+        pool = pool.filter((question) => wrongIds.includes(question.id));
+    }
+
+    if (!pool.length) {
+        document.getElementById("error").textContent =
+            "출제 가능한 문제가 없습니다. 과목이나 학습 방식을 바꿔 주세요.";
+        return;
+    }
+
+    const minutesInput = document.getElementById("minutes");
+
+    if (!minutesInput.reportValidity()) {
+        return;
+    }
+
+    const minutes = Number(minutesInput.value);
+
+    if (!Number.isFinite(minutes)) {
+        document.getElementById("error").textContent =
+            "제한시간을 올바르게 입력해 주세요.";
+        return;
+    }
+
+    if (document.getElementById("random").checked) {
+        pool = shuffle(pool);
+    }
+
+    const countValue = document.getElementById("count").value;
+    const count = countValue === "all" ? pool.length : Number(countValue);
+
+    exam = pool.slice(0, count);
+    currentIndex = 0;
+    answers = {};
+    flags = {};
+    practiceRevealed = {};
+    finished = false;
+    reviewOnlyWrong = false;
+    sessionStarted = true;
+
+    deadline = minutes > 0
+        ? Date.now() + minutes * 60 * 1000
+        : null;
+
+    stopTimer();
+    showQuestion();
+
+    if (deadline !== null) {
+        timerId = setInterval(() => {
+            if (Date.now() >= deadline) {
+                finishExam();
+            } else {
+                updateTimer();
+            }
+        }, 1000);
+    }
+
+    window.scrollTo(0, 0);
+}
+
+function updateTimer() {
+    const element = document.getElementById("timer");
+
+    if (!element) {
+        return;
+    }
+
+    if (finished) {
+        element.textContent = "시험 종료";
+        return;
+    }
+
+    if (deadline === null) {
+        element.textContent = "시간 제한 없음";
+        return;
+    }
+
+    const seconds = Math.max(
+        0,
+        Math.ceil((deadline - Date.now()) / 1000)
+    );
+
+    const minutesText = String(Math.floor(seconds / 60)).padStart(2, "0");
+    const secondsText = String(seconds % 60).padStart(2, "0");
+
+    element.textContent = `${minutesText}:${secondsText}`;
+}
+
+function visibleIndexes() {
+    return exam
+        .map((question, index) => ({ question, index }))
+        .filter(({ question }) => !reviewOnlyWrong || isWrong(question))
+        .map(({ index }) => index);
+}
+
+function showQuestion() {
+    const question = exam[currentIndex];
+    const selected = answers[question.id];
+
+    const revealed =
+        finished || Boolean(practiceRevealed[question.id]);
+
+    const locked = revealed || (!finished && chosenMode !== "exam" && selected !== undefined);
+    const indexes = visibleIndexes();
+    const position = indexes.indexOf(currentIndex);
+
+    const previousIndex = indexes[position - 1];
+    const nextIndex = indexes[position + 1];
+
+    const optionsHtml = question.options.map((option, index) => {
+        const classes = ["option"];
+
+        if (selected === index) {
+            classes.push("selected");
+        }
+
+        if (revealed && index === question.answer) {
+            classes.push("correct");
+        }
+
+        if (
+            revealed &&
+            selected === index &&
+            index !== question.answer
+        ) {
+            classes.push("incorrect");
+        }
+
+        return `
+      <button
+        class="${classes.join(" ")}"
+        data-option="${index}"
+        aria-pressed="${selected === index}"
+        ${locked ? "disabled" : ""}
+      >
+        <span class="option-number">${index + 1}</span>
+        <span>${escapeHtml(option)}</span>
+      </button>
+    `;
+    }).join("");
+
+    const navigationHtml = indexes.map((index) => {
+        const item = exam[index];
+        const classes = [];
+
+        if (Object.hasOwn(answers, item.id)) {
+            classes.push("answered");
+        }
+
+        if (index === currentIndex) {
+            classes.push("current");
+        }
+
+        if (flags[item.id]) {
+            classes.push("flagged");
+        }
+
+        return `
+      <button
+        data-question="${index}"
+        class="${classes.join(" ")}"
+        aria-label="${index + 1}번 문제"
+        ${index === currentIndex ? 'aria-current="true"' : ""}
+      >
+        ${index + 1}
+      </button>
+    `;
+    }).join("");
+
+    let explanationHtml = "";
+
+    if (revealed) {
+        const status = selected === undefined
+            ? "미응답"
+            : selected === question.answer
+                ? "정답"
+                : "오답";
+
+        explanationHtml = `
+      <div class="explanation">
+        <strong>
+          ${status} · 정답 ${question.answer + 1}번
+        </strong>
+        <p>${escapeHtml(question.explanation || "해설이 없습니다.")}</p>
+      </div>
+    `;
+    }
+
+    const practiceButtonHtml =
+        false && !revealed
+            ? `
+        <button id="revealButton" class="full">
+          정답 및 해설 확인
+        </button>
+      `
+            : "";
+
+    app.innerHTML = `
+    <div class="row">
+      <h1>${finished ? "정답 및 해설" : "정현이 파이팅"}</h1>
+      <div id="timer" class="timer"></div>
+    </div>
+
+    <div class="progress">
+      <span style="width:${answeredCount() / exam.length * 100}%"></span>
+    </div>
+
+    <div class="layout">
+      <section class="card">
+        <div class="row">
+          <span class="tag">
+            ${escapeHtml(question.category)}
+            · 원본 ${question.number}번
+          </span>
+
+          <button id="flagButton">
+            ${flags[question.id] ? "★ 표시됨" : "☆ 나중에 확인"}
+          </button>
+        </div>
+
+        <h2 class="question">
+          ${currentIndex + 1}. ${escapeHtml(question.question)}
+        </h2>
+
+        <div>
+          ${optionsHtml}
+        </div>
+
+        ${practiceButtonHtml}
+        ${explanationHtml}
+
+        <div class="actions">
+          <button
+            id="previousButton"
+            ${previousIndex === undefined ? "disabled" : ""}
+          >
+            이전
+          </button>
+
+          <a href="source.pdf" target="_blank" rel="noopener">
+            원본 확인
+          </a>
+
+          <button
+            id="nextButton"
+            ${finished && nextIndex === undefined ? "disabled" : ""}
+          >
+            ${nextIndex === undefined && !finished ? "완료 / 미응답 확인" : "다음 문제"}
+          </button>
+        </div>
+      </section>
+
+      <aside class="card">
+        <h2>${reviewOnlyWrong ? "오답 문제" : "문제 이동"}</h2>
+
+        <p class="muted small">
+          ${answeredCount()} / ${exam.length}문제 응답
+          · 노란 밑줄: 검토 표시
+        </p>
+
+        <div class="numbers">
+          ${navigationHtml}
+        </div>
+
+        <button id="submitButton" class="primary full">
+          ${finished ? "결과 보기" : "제출 및 채점"}
+        </button>
+
+        <button id="homeButton" class="full">
+          처음으로
+        </button>
+      </aside>
+    </div>
+  `;
+
+    updateTimer();
+
+    document.querySelectorAll("[data-option]").forEach((button) => {
+        button.onclick = () => {
+            if (finished || practiceRevealed[question.id] || (chosenMode !== "exam" && answers[question.id] !== undefined)) {
+                return;
+            }
+
+            if (deadline !== null && Date.now() >= deadline) {
+                finishExam();
+                return;
+            }
+
+            answers[question.id] = Number(button.dataset.option);
+            if (instantFeedback) {
+              practiceRevealed[question.id] = true;
+              showQuestion();
+            } else {
+              advanceQuestion();
+            }
+        };
+    });
+
+    document.querySelectorAll("[data-question]").forEach((button) => {
+        button.onclick = () => {
+            currentIndex = Number(button.dataset.question);
+            showQuestion();
+        };
+    });
+
+    document.getElementById("flagButton").onclick = () => {
+        flags[question.id] = !flags[question.id];
+        showQuestion();
+    };
+
+    document.getElementById("previousButton").onclick = () => {
+        if (previousIndex !== undefined) {
+            currentIndex = previousIndex;
+            showQuestion();
+        }
+    };
+
+    document.getElementById("nextButton").onclick = () => {
+        if (!finished) { advanceQuestion(); return; }
+        if (nextIndex !== undefined) {
+            currentIndex = nextIndex;
+            showQuestion();
+        }
+    };
+
+    const revealButton = document.getElementById("revealButton");
+
+    if (revealButton) {
+        revealButton.onclick = () => {
+            if (deadline !== null && Date.now() >= deadline) {
+                finishExam();
+                return;
+            }
+
+            if (answers[question.id] === undefined) {
+                alert("먼저 답을 선택해 주세요.");
+                return;
+            }
+
+            practiceRevealed[question.id] = true;
+            showQuestion();
+        };
+    }
+
+    document.getElementById("submitButton").onclick = () => {
+        if (finished) {
+            showResult();
+            return;
+        }
+
+        const unanswered = exam.length - answeredCount();
+        const message = unanswered > 0
+            ? `${unanswered}문제가 미응답입니다. 제출할까요?`
+            : "답안을 제출할까요?";
+
+        if (confirm(message)) {
+            finishExam();
+        }
+    };
+
+    document.getElementById("homeButton").onclick = () => {
+        if (finished || confirm("현재 시험을 종료할까요?")) {
+            showHome();
+        }
+    };
+}
+
+function finishExam() {
+    if (finished) {
+        return;
+    }
+
+    finished = true;
+    stopTimer();
+
+    const incorrectQuestions = exam.filter(isWrong);
+    const testedIds = new Set(exam.map((question) => question.id));
+
+    wrongIds = [
+        ...new Set([
+            ...wrongIds.filter((id) => !testedIds.has(id)),
+            ...incorrectQuestions.map((question) => question.id)
+        ])
+    ];
+
+    writeStorage("metal-wrong", wrongIds);
+
+    const correctCount = exam.length - incorrectQuestions.length;
+    const score = Math.round(correctCount / exam.length * 100);
+
+    history.unshift({
+        date: new Date().toLocaleString("ko-KR"),
+        total: exam.length,
+        score
+    });
+
+    history = history.slice(0, 20);
+    writeStorage("metal-history", history);
+
+    showResult();
+    window.scrollTo(0, 0);
+}
+
+function showResult() {
+    const correctCount = exam.filter(
+        (question) => answers[question.id] === question.answer
+    ).length;
+
+    const score = Math.round(correctCount / exam.length * 100);
+    const unanswered = exam.length - answeredCount();
+    const incorrectCount = exam.length - correctCount;
+
+    app.innerHTML = `
+    <section class="card result">
+      <h1>시험 결과</h1>
+
+      <div class="score">${score}점</div>
+
+      <p>
+        총 ${exam.length}문제 중
+        <strong>${correctCount}문제 정답</strong>
+      </p>
+
+      <p class="muted">
+        오답 ${incorrectCount - unanswered}문제
+        · 미응답 ${unanswered}문제
+      </p>
+
+      <div class="result-actions">
+        <button id="allReviewButton" class="primary">
+          전체 해설
+        </button>
+
+        <button
+          id="wrongReviewButton"
+          ${incorrectCount === 0 ? "disabled" : ""}
+        >
+          오답 해설
+        </button>
+
+        <button id="resultHomeButton">
+          처음으로
+        </button>
+      </div>
+
+      <p class="muted small">
+        시험 기록과 오답은 이 브라우저에 저장됩니다.
+      </p>
+    </section>
+  `;
+
+    document.getElementById("allReviewButton").onclick = () => {
+        reviewOnlyWrong = false;
+        currentIndex = 0;
+        showQuestion();
+    };
+
+    document.getElementById("wrongReviewButton").onclick = () => {
+        const firstWrongIndex = exam.findIndex(isWrong);
+
+        if (firstWrongIndex === -1) {
+            return;
+        }
+
+        reviewOnlyWrong = true;
+        currentIndex = firstWrongIndex;
+        showQuestion();
+    };
+
+    document.getElementById("resultHomeButton").onclick = showHome;
+}
+
+document.getElementById("shareButton").onclick = async () => {
+    try {
+        await navigator.clipboard.writeText(location.href);
+        alert("링크를 복사했습니다.");
+    } catch {
+        prompt("아래 링크를 복사하세요.", location.href);
+    }
+};
+
+window.addEventListener("beforeunload", (event) => {
+    if (sessionStarted && !finished) {
+        event.preventDefault();
+        event.returnValue = "";
+    }
+});
+
+document.addEventListener("visibilitychange", () => {
+    if (
+        !document.hidden &&
+        sessionStarted &&
+        !finished &&
+        deadline !== null &&
+        Date.now() >= deadline
+    ) {
+        finishExam();
+    }
+});
+
+async function loadQuestions() {
+    try {
+        const response = await fetch("questions.json");
+
+        if (!response.ok) {
+            throw new Error("문제 파일을 불러오지 못했습니다.");
+        }
+
+        const data = await response.json();
+
+        if (!Array.isArray(data)) {
+            throw new Error("문제 데이터 형식이 올바르지 않습니다.");
+        }
+
+        bank = data.filter((question) => (
+            typeof question.id === "string" &&
+            typeof question.question === "string" &&
+            typeof question.category === "string" &&
+            Array.isArray(question.options) &&
+            question.options.length === 4 &&
+            Number.isInteger(question.answer) &&
+            question.answer >= 0 &&
+            question.answer <= 3
+        ));
+
+        if (!bank.length) {
+            throw new Error("출제 가능한 문제가 없습니다.");
+        }
+
+        const validIds = new Set(bank.map((question) => question.id));
+        wrongIds = wrongIds.filter((id) => validIds.has(id));
+
+        showHome();
+    } catch (error) {
+        app.innerHTML = `
+      <section class="card">
+        <h1>문제를 불러오지 못했습니다.</h1>
+        <p>${escapeHtml(error.message)}</p>
+        <p>
+          questions.json이 같은 폴더에 있는지 확인하고,
+          http://localhost:8000으로 접속해 주세요.
+        </p>
+        <button id="retryButton">다시 시도</button>
+      </section>
+    `;
+
+        document.getElementById("retryButton").onclick = loadQuestions;
+    }
+}
+
+loadQuestions();
