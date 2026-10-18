@@ -18,7 +18,7 @@ function showHome() {
   stopTimer();
   sessionStarted = false;
   app.innerHTML = `
-    <section class="intro"><h1>정현이 파이팅</h1><p class="muted">학습 방법을 선택하세요.</p></section>
+    <section class="intro"><h1>파이팅</h1><p class="muted">학습 방법을 선택하세요.</p></section>
     <section class="card">
       <button class="full primary" data-mode="exam">1. 전체 문제 풀어보기 · 실전 연습</button>
       <button class="full" data-mode="practice">2. 연습 모드 · 전체 풀기</button>
@@ -147,7 +147,7 @@ function showSettings() {
 
     app.innerHTML = `
     <section class="intro">
-      <h1>정현이 파이팅</h1>
+      <h1>파이팅</h1>
       <p class="muted">
         과목과 문항 수를 선택하고 시험을 시작하세요.
       </p>
@@ -464,7 +464,7 @@ function showQuestion() {
 
     app.innerHTML = `
     <div class="row">
-      <h1>${finished ? "정답 및 해설" : "정현이 파이팅"}</h1>
+      <h1>${finished ? "정답 및 해설" : "파이팅"}</h1>
       <div id="timer" class="timer"></div>
     </div>
 
